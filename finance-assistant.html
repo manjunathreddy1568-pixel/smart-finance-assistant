@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Finance Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1f2937, #111827);
+            color: #d1d5db;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .main-container {
+            background-color: #1f2937;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 1200px;
+            padding: 2rem;
+            display: grid;
+            gap: 2rem;
+            grid-template-areas:
+                'header'
+                'controls'
+                'stats'
+                'dashboard';
+            transition: all 0.3s ease-in-out;
+        }
+
+        @media (min-width: 768px) {
+            .main-container {
+                grid-template-columns: 1fr 2fr;
+                grid-template-rows: auto auto auto;
+                grid-template-areas:
+                    'header header'
+                    'controls stats'
+                    'dashboard dashboard';
+            }
+        }
+        
+        .section-card {
+            background-color: #111827;
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+
+    <div class="main-container">
+        <!-- Header -->
+        <header class="text-center p-4 grid-area-header">
+            <h1 class="text-4xl font-extrabold text-blue-400 mb-2">Student Finance Manager</h1>
+            <p class="text-sm text-gray-400">Manage your money and achieve your financial goals.</p>
+        </header>
+
+        <!-- Main controls section -->
+        <div class="section-card grid-area-controls">
+            <h2 class="text-2xl font-bold mb-4 text-gray-100">Add Transaction</h2>
+            <div class="space-y-4">
+                <input type="number" id="transaction-amount" placeholder="Amount" class="w-full p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="transaction-type" class="w-full p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                </select>
+                <input type="text" id="transaction-description" placeholder="Description (e.g., 'Coffee', 'Salary')" class="w-full p-3 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="add-transaction-btn" class="w-full py-3 px-4 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-all duration-300 transform hover:scale-105">
+                    Add Transaction
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats and Goals section -->
+        <div class="section-card grid-area-stats">
+            <h2 class="text-2xl font-bold mb-4 text-gray-100">Financial Summary</h2>
+            <div class="flex justify-around mb-4 text-center">
+                <div>
+                    <p class="text-gray-400">Total Income</p>
+                    <p id="total-income" class="text-green-400 text-3xl font-bold">$0.00</p>
+                </div>
+                <div>
+                    <p class="text-gray-400">Total Expenses</p>
+                    <p id="total-expenses" class="text-red-400 text-3xl font-bold">$0.00</p>
+                </div>
+            </div>
+            <div class="bg-gray-700 p-4 rounded-lg">
+                <h3 class="font-semibold text-lg mb-2">Budget Alerts</h3>
+                <div id="alerts-container">
+                    <p class="text-gray-400">No alerts for now.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard section -->
+        <div class="section-card grid-area-dashboard">
+            <h2 class="text-2xl font-bold mb-4 text-gray-100">Analytics Dashboard</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="font-semibold text-lg mb-2">Spending by Category</h3>
+                    <canvas id="category-chart"></canvas>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="font-semibold text-lg mb-2">Monthly Spending</h3>
+                    <canvas id="monthly-chart"></canvas>
+                </div>
+            </div>
+            
+            <h3 class="text-2xl font-bold mt-8 mb-4">Transaction History</h3>
+            <div id="transactions-list" class="space-y-2 max-h-96 overflow-y-auto">
+                <!-- Transactions will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for messages and errors -->
+    <div id="modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 text-center">
+            <p id="modal-message" class="text-white text-lg font-semibold mb-4"></p>
+            <button id="modal-close-button" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all duration-300">OK</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase config
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof _firebase_config !== 'undefined' ? JSON.parse(_firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+        
+        // Modal functions
+        function showModal(message) {
+            const modal = document.getElementById('modal');
+            const modalMessage = document.getElementById('modal-message');
+            modalMessage.textContent = message;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        document.getElementById('modal-close-button').addEventListener('click', () => {
+            const modal = document.getElementById('modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+
+        // Initialize Firebase
+        let app, db, auth, userId;
+        try {
+            if (Object.keys(firebaseConfig).length > 0) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug');
+            } else {
+                showModal("Firebase config not found. The app will run without persistence.");
+            }
+        } catch (e) {
+            console.error("Firebase initialization error:", e);
+            showModal("Firebase initialization failed. The app will run without persistence.");
+        }
+
+        // DOM elements
+        const amountInput = document.getElementById('transaction-amount');
+        const typeSelect = document.getElementById('transaction-type');
+        const descriptionInput = document.getElementById('transaction-description');
+        const addButton = document.getElementById('add-transaction-btn');
+        const totalIncomeEl = document.getElementById('total-income');
+        const totalExpensesEl = document.getElementById('total-expenses');
+        const alertsContainer = document.getElementById('alerts-container');
+        const transactionsList = document.getElementById('transactions-list');
+        const categoryChartCanvas = document.getElementById('category-chart');
+        const monthlyChartCanvas = document.getElementById('monthly-chart');
+
+        // Chart instances
+        let categoryChart, monthlyChart;
+
+        // Transaction data arrays
+        let transactions = [];
+        let categories = {};
+        let monthlyData = {};
+
+        // API call setup
+        const apiKey = "";
+        const apiUrl = https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey};
+
+        // Function to classify a transaction using Gemini API
+        async function classifyTransaction(description) {
+            const payload = {
+                contents: [{
+                    parts: [{ text: Categorize the following transaction description into a single word from a predefined list. Do not use any other words, and provide only the category. The list of categories is: 'Groceries', 'Food', 'Shopping', 'Bills', 'Transportation', 'Entertainment', 'Education', 'Health', 'Other'.\n\nTransaction: ${description} }]
+                }],
+                generationConfig: {
+                    responseMimeType: "text/plain"
+                },
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(HTTP error! Status: ${response.status});
+                }
+
+                const result = await response.json();
+                const category = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().replace(/['"`.]/g, '');
+                return category;
+            } catch (error) {
+                console.error("Error classifying transaction:", error);
+                return 'Other';
+            }
+        }
+
+        // Function to add a transaction to Firestore and update UI
+        async function addTransaction() {
+            const amount = parseFloat(amountInput.value);
+            const type = typeSelect.value;
+            const description = descriptionInput.value.trim();
+
+            if (isNaN(amount) || amount <= 0 || description === '') {
+                showModal("Please enter a valid amount and description.");
+                return;
+            }
+
+            // Classify transaction using AI
+            const category = await classifyTransaction(description);
+
+            const newTransaction = {
+                amount: amount,
+                type: type,
+                description: description,
+                category: category,
+                timestamp: new Date().toISOString(),
+            };
+
+            if (db) {
+                try {
+                    await addDoc(collection(db, artifacts/${appId}/users/${userId}/transactions), newTransaction);
+                    amountInput.value = '';
+                    descriptionInput.value = '';
+                } catch (e) {
+                    console.error("Error adding document to Firestore:", e);
+                    showModal("Failed to save transaction.");
+                }
+            } else {
+                transactions.push(newTransaction);
+                renderUI();
+                amountInput.value = '';
+                descriptionInput.value = '';
+            }
+        }
+
+        // Function to update the charts
+        function updateCharts() {
+            // Category Chart
+            const categoryLabels = Object.keys(categories);
+            const categoryData = Object.values(categories);
+            if (categoryChart) categoryChart.destroy();
+            categoryChart = new Chart(categoryChartCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: categoryLabels,
+                    datasets: [{
+                        data: categoryData,
+                        backgroundColor: ['#4299E1', '#F56565', '#48BB78', '#ECC94B', '#9F7AEA', '#ED8936', '#2D3748', '#CBD5E0', '#3182CE'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#d1d5db' },
+                        }
+                    }
+                }
+            });
+
+            // Monthly Chart
+            const monthlyLabels = Object.keys(monthlyData).sort();
+            const monthlyAmounts = monthlyLabels.map(month => monthlyData[month]);
+            if (monthlyChart) monthlyChart.destroy();
+            monthlyChart = new Chart(monthlyChartCanvas, {
+                type: 'bar',
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [{
+                        label: 'Monthly Spending',
+                        data: monthlyAmounts,
+                        backgroundColor: '#4299E1',
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#d1d5db' },
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#9ca3af' } },
+                        y: { ticks: { color: '#9ca3af' }, grid: { color: '#4b5563' } }
+                    }
+                }
+            });
+        }
+
+        // Function to render all UI elements
+        function renderUI() {
+            let totalIncome = 0;
+            let totalExpenses = 0;
+            categories = {};
+            monthlyData = {};
+            transactionsList.innerHTML = '';
+            alertsContainer.innerHTML = '';
+
+            transactions.forEach(t => {
+                if (t.type === 'income') {
+                    totalIncome += t.amount;
+                } else {
+                    totalExpenses += t.amount;
+                    if (!categories[t.category]) {
+                        categories[t.category] = 0;
+                    }
+                    categories[t.category] += t.amount;
+
+                    const date = new Date(t.timestamp);
+                    const month = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                    if (!monthlyData[month]) {
+                        monthlyData[month] = 0;
+                    }
+                    monthlyData[month] += t.amount;
+                }
+
+                // Create transaction list item
+                const transactionEl = document.createElement('div');
+                transactionEl.className = 'p-3 rounded-lg border';
+                if (t.type === 'income') {
+                    transactionEl.classList.add('bg-green-800', 'border-green-700');
+                } else {
+                    transactionEl.classList.add('bg-red-800', 'border-red-700');
+                }
+                const formattedAmount = t.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                transactionEl.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <p class="font-semibold">${t.description}</p>
+                        <p class="font-bold">${t.type === 'income' ? '+' : '-'}${formattedAmount}</p>
+                    </div>
+                    <p class="text-sm text-gray-400">Category: ${t.category}</p>
+                `;
+                transactionsList.prepend(transactionEl);
+            });
+
+            totalIncomeEl.textContent = totalIncome.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            totalExpensesEl.textContent = totalExpenses.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            
+            // Check for budget alerts (simple example)
+            if (totalExpenses > totalIncome) {
+                const alertEl = document.createElement('div');
+                alertEl.className = 'p-3 bg-yellow-600 rounded-lg text-white font-semibold';
+                alertEl.textContent = "Warning: Your expenses are exceeding your income!";
+                alertsContainer.appendChild(alertEl);
+            } else if (totalExpenses / totalIncome > 0.8) {
+                const alertEl = document.createElement('div');
+                alertEl.className = 'p-3 bg-yellow-600 rounded-lg text-white font-semibold';
+                alertEl.textContent = "You're approaching your budget limit!";
+                alertsContainer.appendChild(alertEl);
+            } else {
+                alertsContainer.innerHTML = '<p class="text-gray-400">No alerts for now.</p>';
+            }
+
+            updateCharts();
+        }
+
+        // Handle authentication and data loading
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("User is authenticated with ID:", userId);
+
+                if (db) {
+                    const transactionsRef = collection(db, artifacts/${appId}/users/${userId}/transactions);
+                    const q = query(transactionsRef, orderBy('timestamp'));
+
+                    onSnapshot(q, (snapshot) => {
+                        transactions = [];
+                        snapshot.forEach(doc => {
+                            transactions.push(doc.data());
+                        });
+                        renderUI();
+                    }, (error) => {
+                        console.error("Error listening to transactions:", error);
+                        showModal("Error loading transaction data.");
+                    });
+                } else {
+                    renderUI(); // Render with local data if Firestore is not available
+                }
+            } else {
+                userId = crypto.randomUUID();
+                console.log("User not authenticated, using a temporary ID:", userId);
+                renderUI(); // Initial render without Firestore connection
+            }
+        });
+        
+        // Initial authentication on page load
+        (async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                showModal("Authentication failed. Please try again.");
+            }
+        })();
+
+        // Event listeners
+        addButton.addEventListener('click', addTransaction);
+        amountInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addTransaction();
+            }
+        });
+    </script>
+</body>
+</html>
